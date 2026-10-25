@@ -1,0 +1,45 @@
+# ---- Xcode / 编译产物 ----
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+*.ipa
+Payload/
+*.dSYM
+*.xcarchive
+xcuserdata/
+*.xcuserstate
+*.moved-aside
+
+# ---- SwiftPM ----
+.build/
+.swiftpm/
+Package.resolved
+
+# ---- 本地打包产物 ----
+LumaClean-源码.zip
+*.zip
+
+# ---- App 图标（由 tools/make_icon.py 生成，不入库）----
+# 图标是二进制文件，走 Git 有两个坏处：一是容易在 Windows/macOS 之间被
+# 换行符转换弄坏，二是改一次颜色就多一份 21KB 的历史。改成脚本现场生成后，
+# 仓库里只保留「怎么画」，任何时候都能重现同一张图。
+Resources/AppIcon.png
+Assets/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+
+# ---- macOS / Windows ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 编辑器 ----
+.idea/
+.vscode/
+*.swp
+
+# ---- 本地环境与密钥（禁止入库）----
+.env
+.env.local
+*.p12
+*.mobileprovision
+*.cer

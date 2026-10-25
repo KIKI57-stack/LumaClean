@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info-xcode.plist
+
+  这是给 Xcode / xcodebuild 使用的「完整」Info.plist。
+  与同目录下的 Info.plist 不同：那个文件只是给 xtool 用的覆盖片段
+  （xtool 会把它合并进自动生成的完整 plist），不能直接交给 Xcode。
+
+  因此两条构建通道各自使用各自的 plist，互不影响：
+    - xtool 通道：xtool.yml -> infoPath: Support/Info.plist
+    - Xcode 通道：project.yml -> INFOPLIST_FILE: Support/Info-xcode.plist
+
+  所有形如 $(XXX) 的值都是 Xcode 的构建变量，在编译期由 Xcode 展开，
+  不要在 Xcode 之外直接使用本文件。
+-->
+<plist version="1.0">
+<dict>
+    <!-- 本地化默认区域 -->
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh_CN</string>
+
+    <!-- 桌面图标下方显示的名称 -->
+    <key>CFBundleDisplayName</key>
+    <string>相册清理</string>
+
+    <!-- 可执行文件名，由 Xcode 展开为 target 名 -->
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+
+    <!-- Bundle ID，由 project.yml 的 PRODUCT_BUNDLE_IDENTIFIER 提供 -->
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <!-- Bundle 名，展开后为 PhotoSweep -->
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+
+    <!-- 应用包类型 -->
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <!-- 对外版本号，对应 MARKETING_VERSION -->
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+
+    <!-- 构建号，对应 CURRENT_PROJECT_VERSION -->
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+
+    <!-- 声明只在 iOS 上运行 -->
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+
+    <!-- 相册读取权限文案：与 Support/Info.plist 保持一致 -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>需要访问你的相册，用于扫描重复照片、相似连拍、模糊照片、截图和大体积视频。所有分析都在本机完成，照片不会上传。</string>
+
+    <!-- 相册写入权限文案：与 Support/Info.plist 保持一致 -->
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>清理照片时需要写入相册的权限。</string>
+
+    <!--
+      Scene 生命周期声明。SwiftUI 的 @main App 依赖它走现代 scene 流程。
+      缺少这个键时 iOS 会退回旧的 UIApplicationDelegate 生命周期，
+      在部分机型上表现为启动后黑屏或根视图不加载 —— 这是最难排查的一类
+      「CI 全绿但装上去打不开」故障，所以必须显式声明。
+      本 App 是单窗口应用，不需要多场景支持。
+    -->
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+    </dict>
+
+    <!--
+      必须存在（哪怕只是空 dict）。
+      缺少这个键时系统会让 App 以兼容模式运行，按旧机型分辨率渲染，
+      结果是界面被裁切、留黑边。
+    -->
+    <key>UILaunchScreen</key>
+    <dict/>
+
+    <!-- 只支持全屏，不参与 iPad 分屏/多任务 -->
+    <key>UIRequiresFullScreen</key>
+    <true/>
+
+    <!-- 仅竖屏 -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+
+    <!-- 强制深色外观，与 App 内 preferredColorScheme(.dark) 一致 -->
+    <key>UIUserInterfaceStyle</key>
+    <string>Dark</string>
+
+    <!-- 状态栏使用浅色文字，保证在深色背景上可读 -->
+    <key>UIStatusBarStyle</key>
+    <string>UIStatusBarStyleLightContent</string>
+</dict>
+</plist>

@@ -1,0 +1,97 @@
+# project.yml — XcodeGen 工程描述文件
+#
+# 作用：用这份声明在 macOS 上生成 PhotoSweep.xcodeproj，供 xcodebuild 编译。
+# 生成的 .xcodeproj 是产物、不纳入版本库（见 .gitignore），
+# 每次 CI 都从本文件重新生成，避免二进制工程文件冲突。
+#
+# 生成命令：xcodegen generate --spec project.yml
+#
+# 注意：本文件与 Package.swift / xtool.yml 是三条互不干扰的通道。
+#   - SwiftPM (xtool)：Package.swift + xtool.yml + Support/Info.plist
+#   - Xcode (CI)：     project.yml + Support/Info-xcode.plist
+# 改动本文件不会影响 xtool 构建。
+
+name: PhotoSweep
+
+options:
+  # 工程文件里显示的最小 XcodeGen 版本，低于此版本会给出提示
+  minimumXcodeGenVersion: "2.38.0"
+  # 按目录层级生成 group，便于在 Xcode 里浏览
+  createIntermediateGroups: true
+  # 生成工程时清理上次残留的文件引用
+  generateEmptyDirectories: false
+  # 全局部署目标：iOS 17.0（与 Package.swift 的 .iOS(.v17) 对齐）
+  deploymentTarget:
+    iOS: "17.0"
+
+# 全局构建设置：target 级别未覆盖时生效
+settings:
+  base:
+    # Swift 语言版本固定为 5.0，对应 Package.swift 的 swiftLanguageModes: [.v5]。
+    # 不要改成 6.0，否则会开启严格并发检查，现有代码会报大量 actor 隔离错误。
+    SWIFT_VERSION: "5.0"
+    # 版本号由下面的 MARKETING_VERSION / CURRENT_PROJECT_VERSION 注入 Info.plist
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # 仅 iPhone（1 = iPhone, 2 = iPad）
+    TARGETED_DEVICE_FAMILY: "1"
+    # 未签名构建：CI 上没有开发者证书，全部关掉签名
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    # 显式关闭自动生成 Info.plist，强制使用我们提供的完整 plist。
+    # Xcode 15 新建工程的模板默认是 YES，会与 INFOPLIST_FILE 冲突。
+    GENERATE_INFOPLIST_FILE: "NO"
+
+targets:
+  PhotoSweep:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+
+    # 源码与资源。
+    # Assets 故意放在 Sources/PhotoSweep 之外：
+    # SwiftPM 会把 target 目录下未声明的非源码文件视为「未处理资源」并报错，
+    # 从而打断 xtool 那条构建通道。
+    sources:
+      - path: Sources/PhotoSweep
+      - path: Assets
+
+    settings:
+      base:
+        PRODUCT_NAME: PhotoSweep
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.photosweep
+        # 使用给 Xcode 用的完整 plist，而不是 xtool 的覆盖片段
+        INFOPLIST_FILE: Support/Info-xcode.plist
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        # asset catalog 里的 AppIcon 集合名
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_VERSION: "5.0"
+        # 未签名
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        GENERATE_INFOPLIST_FILE: "NO"
+
+# 显式声明 scheme，保证 `xcodebuild -scheme PhotoSweep` 一定能找到。
+# 不声明的话 XcodeGen 会按 target 自动生成一个同名 scheme，
+# 但显式写出来更稳定、也便于后续加测试 target。
+schemes:
+  PhotoSweep:
+    build:
+      targets:
+        PhotoSweep: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

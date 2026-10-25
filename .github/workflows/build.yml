@@ -1,0 +1,191 @@
+# .github/workflows/build.yml
+#
+# 在 GitHub 的 macOS runner 上云端编译 PhotoSweep，产出「未签名 ipa」。
+# Windows 用户下载该 ipa 后，用 Sideloadly / AltStore 等工具自签安装即可。
+#
+# 设计要点：
+#   1. 不依赖任何第三方依赖，只需要 XcodeGen（brew 安装）。
+#   2. 日志不接任何美化管道 —— 这类工具（ruby gem 形式的格式化器）在 macos-14
+#      runner 上默认没有安装，接进管道会让 pipefail 因 "command not found" 报错。
+#   3. 生成的 .xcodeproj 不入库，每次从 project.yml 现场生成。
+#   4. 全程关闭代码签名（CI 上没有证书），产出的 ipa 由用户侧签名。
+
+name: Build unsigned IPA
+
+on:
+  # 允许在 Actions 页面手动触发
+  workflow_dispatch:
+  # push 到 main 时自动构建
+  push:
+    branches:
+      - main
+
+# 最小权限：只需要读代码
+permissions:
+  contents: read
+
+# 同一分支的新构建会取消上一次未完成的构建，节省 runner 时间
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ipa:
+    name: Build PhotoSweep (unsigned)
+    # macos-14 自带 Xcode 15.x 与 iOS 17 SDK，满足 iOS 17 部署目标
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 打印工具链版本
+        run: |
+          echo "== macOS =="
+          sw_vers
+          echo "== Xcode =="
+          xcodebuild -version
+          echo "== 开发者目录 =="
+          xcode-select -p
+          echo "== 可用 SDK =="
+          xcodebuild -showsdks | grep -i ios || true
+
+      - name: 生成 App 图标
+        run: |
+          set -euo pipefail
+          # 图标不入库（二进制文件走 Git 容易出问题，也没必要存两份），
+          # 改由 tools/make_icon.py 现场渲染。脚本是确定性的：
+          # 同一份代码在任何机器上都产出字节完全相同的 PNG。
+          python3 tools/make_icon.py
+          echo "== 图标产物 =="
+          ls -l Resources/AppIcon.png Assets/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+          file Resources/AppIcon.png
+
+      - name: 安装 XcodeGen
+        run: |
+          set -euo pipefail
+          if command -v xcodegen >/dev/null 2>&1; then
+            echo "runner 已自带 XcodeGen，跳过安装"
+          else
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: 生成 Xcode 工程
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec project.yml
+          echo "== 生成结果 =="
+          ls -la PhotoSweep.xcodeproj
+          echo "== scheme 列表 =="
+          xcodebuild -project PhotoSweep.xcodeproj -list
+
+      - name: 编译 App（Release / 未签名）
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project PhotoSweep.xcodeproj \
+            -scheme PhotoSweep \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: 校验产物
+        run: |
+          set -euo pipefail
+          APP_PATH="build/Build/Products/Release-iphoneos/PhotoSweep.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::未找到编译产物 $APP_PATH"
+            exit 1
+          fi
+          echo "== .app 内容 =="
+          ls -la "$APP_PATH"
+          echo "== 可执行文件架构 =="
+          file "$APP_PATH/PhotoSweep" || true
+          echo "== Info.plist 关键键 =="
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$APP_PATH/Info.plist"
+
+          # ---- 断言 A：实际打进 .app 的 Info.plist 必须是我们手写的那一份 ----
+          # 风险来源：若 GENERATE_INFOPLIST_FILE 被置为 YES（或 XcodeGen 覆盖了
+          # INFOPLIST_FILE），xcodebuild 会忽略我们的 plist 并现场生成一份。
+          # 生成的那份里没有相册权限文案，App 一旦请求相册权限就会被系统直接
+          # 终止 —— 而编译阶段一路绿灯，属于「CI 全绿但装上去就闪退」的经典坑。
+          # 这里逐个键确认，缺任何一个立即失败。
+          for key in NSPhotoLibraryUsageDescription \
+                     NSPhotoLibraryAddUsageDescription \
+                     UIApplicationSceneManifest \
+                     UILaunchScreen \
+                     UIUserInterfaceStyle; do
+            if /usr/libexec/PlistBuddy -c "Print :$key" "$APP_PATH/Info.plist" >/dev/null 2>&1; then
+              echo "OK   $key"
+            else
+              echo "::error::Info.plist 缺少 $key —— INFOPLIST_FILE 很可能被覆盖了"
+              exit 1
+            fi
+          done
+
+          # ---- 断言 B：显示名必须是我们写的「相册清理」----
+          # 自动生成的 plist 会把 CFBundleDisplayName 填成 PRODUCT_NAME（PhotoSweep），
+          # 所以这一条是「手写 plist 确实生效」最直接的证据。
+          # 注意：如果以后改了 Support/Info-xcode.plist 里的显示名，记得同步这里。
+          DISPLAY_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$APP_PATH/Info.plist")
+          case "$DISPLAY_NAME" in
+            相册清理)
+              echo "OK   CFBundleDisplayName = $DISPLAY_NAME"
+              ;;
+            *)
+              echo "::error::CFBundleDisplayName 为 '$DISPLAY_NAME'，预期 '相册清理' —— INFOPLIST_FILE 未生效"
+              exit 1
+              ;;
+          esac
+
+      - name: 打包为未签名 ipa
+        run: |
+          set -euo pipefail
+          APP_PATH="build/Build/Products/Release-iphoneos/PhotoSweep.app"
+          IPA_NAME="PhotoSweep-unsigned.ipa"
+          rm -rf Payload
+          rm -f "$IPA_NAME"
+          mkdir -p Payload
+          # ipa 的固定结构：根目录下只有一个 Payload/，里面放 .app
+          cp -R "$APP_PATH" Payload/
+          # -X：不写入扩展属性/资源分支。
+          # macOS 自带的 Info-ZIP 在遇到带 xattr 的文件时，会把它们塞进
+          # ipa 根目录的 __MACOSX/，导致 ipa 结构不干净（Payload 不再是唯一顶层项）。
+          zip -qry -X "$IPA_NAME" Payload
+          echo "== 打包结果 =="
+          ls -lh "$IPA_NAME"
+          echo "== ipa 内条目（前 20 条）=="
+          # 注意：本 step 开启了 pipefail，不能用 `| head -20`。
+          # head 读满 20 行就关闭管道，上游 unzip 会收到 SIGPIPE 并以 141 退出，
+          # 在 pipefail 下等于整个 step 失败。条目数一旦超过 20 就会踩到。
+          # sed 会读完整个输入，不会提前关闭管道，因此是安全写法。
+          unzip -l "$IPA_NAME" | sed -n '1,20p'
+          echo "== ipa 顶层条目（必须只有 Payload/）=="
+          unzip -Z1 "$IPA_NAME" | awk -F/ '{print $1}' | sort -u
+
+      - name: 上传 ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhotoSweep-unsigned-ipa
+          path: PhotoSweep-unsigned.ipa
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: 编译失败时上传日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/Logs/Build/
+          retention-days: 7
+          if-no-files-found: ignore

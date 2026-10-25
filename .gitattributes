@@ -1,0 +1,40 @@
+# .gitattributes
+#
+# 目的：让 Windows 上编辑、macOS 上编译的同一个仓库不因换行符差异而炸掉。
+#
+# 背景：Windows 版 Git 默认 core.autocrlf=true，会把文本文件检出成 CRLF。
+# 这对 Swift / YAML / plist 通常无害，但有两个真实风险：
+#   1. 带 shebang 的脚本（tools/*.sh）若被存成 CRLF，
+#      在 macOS runner 上会以 "bad interpreter: ^M" 直接失败。
+#   2. 二进制文件（png / ipa）一旦被当作文本处理，会被 Git 改写字节，
+#      图标或产物直接损坏。
+#
+# 所以这里强制：文本一律以 LF 入库、以 LF 检出；二进制一律不做任何转换。
+
+# 默认规则：由 Git 自动识别文本文件，入库统一 LF，检出也用 LF
+* text=auto eol=lf
+
+# ---- 明确声明为文本，且必须是 LF ----
+*.swift   text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.plist   text eol=lf
+*.md      text eol=lf
+*.sh      text eol=lf
+*.py      text eol=lf
+*.json    text eol=lf
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+
+# ---- 二进制：禁止换行符转换与文本合并 ----
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.heic  binary
+*.pdf   binary
+*.ipa   binary
+*.zip   binary
+*.xcuserstate binary
+
+# ---- 生成的工程文件不入库（见 .gitignore），若被临时提交也不做文本合并 ----
+*.pbxproj binary

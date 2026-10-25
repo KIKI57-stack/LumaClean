@@ -1,0 +1,5 @@
+version: 1
+bundleID: com.example.photosweep
+product: PhotoSweep
+infoPath: Support/Info.plist
+iconPath: Resources/AppIcon.png

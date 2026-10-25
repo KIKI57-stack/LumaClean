@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>相册清理</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>需要访问你的相册，用于扫描重复照片、相似连拍、模糊照片、截图和大体积视频。所有分析都在本机完成，照片不会上传。</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>清理照片时需要写入相册的权限。</string>
+    <key>UIUserInterfaceStyle</key>
+    <string>Dark</string>
+    <key>UIStatusBarStyle</key>
+    <string>UIStatusBarStyleLightContent</string>
+    <key>UILaunchScreen</key>
+    <dict/>
+</dict>
+</plist>
