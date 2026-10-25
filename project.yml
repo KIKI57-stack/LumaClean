@@ -16,6 +16,18 @@ name: PhotoSweep
 options:
   # 工程文件里显示的最小 XcodeGen 版本，低于此版本会给出提示
   minimumXcodeGenVersion: "2.38.0"
+  # 生成的工程格式。**这一项不能省。**
+  #
+  # XcodeGen 的默认值是 xcode16_0，写出的 project.pbxproj 是 objectVersion = 77，
+  # 属于 Xcode 16 引入的新格式。而 GitHub 的 macos-14 runner 自带的是 Xcode 15.4，
+  # 读到 77 会直接报：
+  #   The project cannot be opened because it is in a future
+  #   Xcode project file format (77).
+  # 整个构建在「生成 Xcode 工程」这一步就挂了。
+  #
+  # xcode15_3 对应 objectVersion = 60，Xcode 15 和 Xcode 16 都能读，
+  # 因此在 macos-14 / macos-15 上都能跑，不受 runner 镜像漂移影响。
+  projectFormat: xcode15_3
   # 按目录层级生成 group，便于在 Xcode 里浏览
   createIntermediateGroups: true
   # 生成工程时清理上次残留的文件引用

@@ -32,8 +32,10 @@ concurrency:
 jobs:
   build-ipa:
     name: Build PhotoSweep (unsigned)
-    # macos-14 自带 Xcode 15.x 与 iOS 17 SDK，满足 iOS 17 部署目标
-    runs-on: macos-14
+    # macos-15 自带 Xcode 16.x，满足 iOS 17 部署目标，且比 macos-14 生命周期更长。
+    # 工程文件格式由 project.yml 的 options.projectFormat 固定为 xcode15_3
+    # （objectVersion 60），Xcode 15 和 16 都能读，所以换 runner 不会踩格式坑。
+    runs-on: macos-15
     timeout-minutes: 30
 
     steps:
@@ -78,6 +80,13 @@ jobs:
           xcodegen generate --spec project.yml
           echo "== 生成结果 =="
           ls -la PhotoSweep.xcodeproj
+          # 打印 objectVersion：这个数字决定工程能被哪个版本的 Xcode 打开。
+          #   77 = Xcode 16 新格式，Xcode 15 会拒绝（报 "future Xcode project file format"）
+          #   60 = Xcode 15 格式，15 / 16 都能读
+          # 万一以后有人删掉 project.yml 里的 options.projectFormat，这行会立刻暴露问题。
+          echo "== objectVersion =="
+          sed -n 's/.*objectVersion = \([0-9]*\);.*/objectVersion = \1/p' \
+            PhotoSweep.xcodeproj/project.pbxproj | sed -n '1p'
           echo "== scheme 列表 =="
           xcodebuild -project PhotoSweep.xcodeproj -list
 
